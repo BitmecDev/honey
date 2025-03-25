@@ -1,10 +1,12 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 import time
 import json
 import libhoney
 from rest_framework import generics, views, response, status, filters, viewsets
 
 from django.shortcuts import render
+
+from honeycomb.socket import send_socket_message
 
 
 def index(request):
@@ -65,6 +67,7 @@ log_event('support_ticket', 'New support ticket created', 'support_page', 'POST'
 # 10. API call error
 log_event('api_error', 'External API call failed', 'backend_process', 'GET', status_code=500, error='API timeout', metadata={'api_endpoint': 'https://api.example.com/data'})
 
+log_event('oximetro', 'Medición exitosa', 'Signos vitales', 'POST',  metadata=[{'cabina': '34' }, {'freq cardiacia': 'valor'}, {'oxigenación': 'valor'}])
 
 
 count = 0
@@ -78,18 +81,46 @@ while True:
 
 
 class SendHoneyCombData(views.APIView):
+    def options(self, request, *args, **kwargs):
+        """Manejar solicitudes OPTIONS para CORS preflight."""
+        response = HttpResponse()
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+
     def post(self, request):
         req = json.loads(self.request.body)
         data = req
         event = libhoney.new_event()
         payload = data
+
+        # Simular un proceso de espera
         count = 0
         while True:
-            count = count + 1
+            count += 1
             time.sleep(1)
             print(f'{count} seconds elapsed')
             if count == 10:
                 break
+
         event.add(payload)
         event.send()
-        return HttpResponse(json.dumps({'result': True, 'data': data}), content_type='application/json')
+
+        # Responder con los encabezados CORS
+        response = JsonResponse({'result': True, 'data': data})
+        response['Access-Control-Allow-Origin'] = '*'  # Cambia '*' por tu dominio de origen si es necesario
+        return response
+
+
+class SendDeactivateEmergencySocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "N-e-stop",
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
