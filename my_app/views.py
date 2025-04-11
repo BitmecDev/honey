@@ -112,6 +112,112 @@ class SendHoneyCombData(views.APIView):
         response['Access-Control-Allow-Origin'] = '*'  # Cambia '*' por tu dominio de origen si es necesario
         return response
 
+# Height
+class SendHeightSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "height"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Weight
+class SendWeightSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "weight"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Pressure
+class SendPressureSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "esfigmo"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Oxygen
+class SendOxygenSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "oxygen"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Temperature
+class SendTemperatureSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "temperature"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Esteto
+class SendEstetoSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "mic"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Booth control
+class SendPatientExitSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "navigation",
+            "vital-sign": "end-screen"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        send_socket_message(cabin, message)
+
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
+# Emergency
+class SendActivateEmergencySocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "e-stop",
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 
 class SendDeactivateEmergencySocketMessage(views.APIView):
     def post(self, request):
@@ -121,6 +227,5 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
             "type": "command",
             "vital-sign": "N-e-stop",
         }
-        send_socket_message(f"{cabin}-cmd", message)
-
+        send_socket_message
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
