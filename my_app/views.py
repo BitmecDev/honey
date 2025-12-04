@@ -184,11 +184,7 @@ class SendOxygenSocketMessage(views.APIView):
             return (msg.get("vs") == "signo")
         
         def predicate(msg: dict) -> bool:
-            if not isinstance(msg, dict):
-                return False
-            return (
-                msg.get("vs") == "oxygen"
-            )
+            return isinstance(msg, dict) and msg.get("vs") == "oxygen"
       
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
