@@ -114,42 +114,191 @@ class SendHoneyCombData(views.APIView):
         return response
 
 # Height
+# class SendHeightSocketMessage(views.APIView):
+#     def post(self, request):
+#         req = json.loads(self.request.body)
+#         cabin = req['channel']
+#         message = {
+#             "type": "command",
+#             "vital-sign": "height"
+#         }
+#         send_socket_message(f"{cabin}-cmd", message)
+#         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 class SendHeightSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
-        cabin = req['channel']
+        cabin = req["channel"]
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         message = {
             "type": "command",
             "vital-sign": "height"
         }
-        send_socket_message(f"{cabin}-cmd", message)
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
+
+            inner = msg.get("message")
+            if not isinstance(inner, dict):
+                return False
+
+            return inner.get("vs") == "height"
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=90,
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],     
+            },
+            status=200,
+        )
 
 # Weight
+# class SendWeightSocketMessage(views.APIView):
+#     def post(self, request):
+#         req = json.loads(self.request.body)
+#         cabin = req['channel']
+#         message = {
+#             "type": "command",
+#             "vital-sign": "weight"
+#         }
+#         send_socket_message(f"{cabin}-cmd", message)
+#         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 class SendWeightSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
-        cabin = req['channel']
+        cabin = req["channel"]
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         message = {
             "type": "command",
             "vital-sign": "weight"
         }
-        send_socket_message(f"{cabin}-cmd", message)
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
+
+            inner = msg.get("message")
+            if not isinstance(inner, dict):
+                return False
+
+            return inner.get("vs") == "weight"
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=90,
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],     
+            },
+            status=200,
+        )
 
 
 # Pressure
+# class SendPressureSocketMessage(views.APIView):
+#     def post(self, request):
+#         req = json.loads(self.request.body)
+#         cabin = req['channel']
+#         message = {
+#             "type": "command",
+#             "vital-sign": "esfigmo"
+#         }
+#         send_socket_message(f"{cabin}-cmd", message)
+#         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 class SendPressureSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
-        cabin = req['channel']
+        cabin = req["channel"]
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         message = {
             "type": "command",
             "vital-sign": "esfigmo"
         }
-        send_socket_message(f"{cabin}-cmd", message)
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
+
+            inner = msg.get("message")
+            if not isinstance(inner, dict):
+                return False
+
+            return inner.get("vs") == "esfigmo"
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=90,
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],     
+            },
+            status=200,
+        )
 
 
 # Oxygen
@@ -217,16 +366,66 @@ class SendOxygenSocketMessage(views.APIView):
 
 
 # Temperature
+# class SendTemperatureSocketMessage(views.APIView):
+#     def post(self, request):
+#         req = json.loads(self.request.body)
+#         cabin = req['channel']
+#         message = {
+#             "type": "command",
+#             "vital-sign": "temperature"
+#         }
+#         send_socket_message(f"{cabin}-cmd", message)
+#         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 class SendTemperatureSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
-        cabin = req['channel']
+        cabin = req["channel"]
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         message = {
             "type": "command",
             "vital-sign": "temperature"
         }
-        send_socket_message(f"{cabin}-cmd", message)
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
+
+            inner = msg.get("message")
+            if not isinstance(inner, dict):
+                return False
+
+            return inner.get("vs") == "temperature"
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=90,
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],     
+            },
+            status=200,
+        )
 
 
 # Esteto

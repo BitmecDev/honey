@@ -9,7 +9,6 @@ urlpatterns = [
     path('weight/', views.SendWeightSocketMessage.as_view(), name='weight'),
     path('esfigmo/', views.SendPressureSocketMessage.as_view(), name='esfigmo'),
     path('oxygen/', views.SendOxygenSocketMessage.as_view(), name='oxygen'),
-    path('oxygen/', views.SendOxygenSocketMessage.as_view(), name='oxygen'),
     path('temperature/', views.SendTemperatureSocketMessage.as_view(), name='temperature'),
     path('stethoscope/', views.SendEstetoSocketMessage.as_view(), name='stethoscope'),
     path('patient-exit/', views.SendPatientExitSocketMessage.as_view(), name='patient-exit'),
