@@ -194,8 +194,8 @@ class SendOxygenSocketMessage(views.APIView):
             sub_channel=sub_channel,
             pub_channel=pub_channel,
             message=message,
-            predicate=predicate,
-            timeout=15,
+            predicate=None,
+            timeout=30,
         )
 
         if result is None:
