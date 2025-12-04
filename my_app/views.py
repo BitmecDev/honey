@@ -192,7 +192,7 @@ class SendOxygenSocketMessage(views.APIView):
             pub_channel=pub_channel,
             message=message,
             predicate=predicate,
-            timeout=30,
+            timeout=90,
         )
 
         if result is None:
@@ -209,8 +209,7 @@ class SendOxygenSocketMessage(views.APIView):
             {
                 "result": True,
                 "channel": result["channel"],
-                "data": result["message"],   
-                "raw": result["__raw__"],   
+                "data": result["message"],     
             },
             status=200,
         )
