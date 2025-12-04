@@ -7,6 +7,7 @@ from rest_framework import generics, views, response, status, filters, viewsets
 from django.shortcuts import render
 
 from honeycomb.socket import send_socket_message
+from honeycomb.socket_client import broker
 
 
 def index(request):
@@ -152,16 +153,64 @@ class SendPressureSocketMessage(views.APIView):
 
 
 # Oxygen
+# class SendOxygenSocketMessage(views.APIView):
+#     def post(self, request):
+#         req = json.loads(self.request.body)
+#         cabin = req['channel']
+#         message = {
+#             "type": "command",
+#             "vital-sign": "oxygen"
+#         }
+#         send_socket_message(f"{cabin}-cmd", message)
+#         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
 class SendOxygenSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
-        cabin = req['channel']
+        cabin = req["channel"]
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         message = {
             "type": "command",
-            "vital-sign": "oxygen"
+            "vital-sign": "oxygen",
         }
-        send_socket_message(f"{cabin}-cmd", message)
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+        def predicate(p: dict) -> bool:
+            msg = (p or {})
+            if isinstance(msg, dict) and "message" in msg and isinstance(msg["message"], dict):
+                msg = msg["message"]
+            return (msg.get("vs") == "signo")
+      
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=15, 
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],
+                "raw": result["__raw__"],
+            },
+            status=200,
+        )
+
 
 
 # Temperature
