@@ -260,17 +260,22 @@ class SendPressureSocketMessage(views.APIView):
 
         message = {
             "type": "command",
-            "vital-sign": "esfigmo"
+            "vital-sign": "esfigmo",
         }
-        
-        readings = {}
+
+        readings = {}  # aquí acumulamos sis, dias, map, bpm
 
         def predicate(msg: dict) -> bool:
             if not isinstance(msg, dict):
                 return False
 
-            vs = msg.get("vs")
-            valor = msg.get("valor")
+            inner = msg.get("message", msg)
+
+            if not isinstance(inner, dict):
+                return False
+
+            vs = inner.get("vs")
+            valor = inner.get("valor")
 
             if vs in ("sis", "dias", "map", "bpm"):
                 readings[vs] = valor
@@ -299,10 +304,11 @@ class SendPressureSocketMessage(views.APIView):
             {
                 "result": True,
                 "channel": result["channel"],
-                "data": readings,     
+                "data": readings,
             },
             status=200,
         )
+
 
 
 # Oxygen
