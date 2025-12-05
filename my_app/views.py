@@ -208,7 +208,7 @@ class SendWeightSocketMessage(views.APIView):
             if not isinstance(inner, dict):
                 return False
 
-            return inner.get("vs") == "weight"
+            return inner.get("vs") == "Weight"
 
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
@@ -271,7 +271,7 @@ class SendPressureSocketMessage(views.APIView):
             if not isinstance(inner, dict):
                 return False
 
-            return inner.get("vs") == "esfigmo"
+            return inner.get("vs") == "sis" and inner.get("vs") == "dias" and inner.get("vs") == "map" and inner.get("vs") == "bpm"
 
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
@@ -334,7 +334,7 @@ class SendOxygenSocketMessage(views.APIView):
             if not isinstance(inner, dict):
                 return False
 
-            return inner.get("vs") == "oxygen"
+            return inner.get("vs") == "SpO2" and inner.get("vs") == "bpm"
 
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
@@ -398,7 +398,7 @@ class SendTemperatureSocketMessage(views.APIView):
             if not isinstance(inner, dict):
                 return False
 
-            return inner.get("vs") == "temperature"
+            return inner.get("vs") == "tmp"
 
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
