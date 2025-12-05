@@ -262,16 +262,20 @@ class SendPressureSocketMessage(views.APIView):
             "type": "command",
             "vital-sign": "esfigmo"
         }
+        
+        readings = {}
 
         def predicate(msg: dict) -> bool:
             if not isinstance(msg, dict):
                 return False
 
-            inner = msg.get("message")
-            if not isinstance(inner, dict):
-                return False
+            vs = msg.get("vs")
+            valor = msg.get("valor")
 
-            return inner.get("vs") == "sis" and inner.get("vs") == "dias" and inner.get("vs") == "map" and inner.get("vs") == "bpm"
+            if vs in ("sis", "dias", "map", "bpm"):
+                readings[vs] = valor
+
+            return all(k in readings for k in ("sis", "dias", "map", "bpm"))
 
         result = broker.publish_and_wait(
             sub_channel=sub_channel,
@@ -295,7 +299,7 @@ class SendPressureSocketMessage(views.APIView):
             {
                 "result": True,
                 "channel": result["channel"],
-                "data": result["message"],     
+                "data": readings,     
             },
             status=200,
         )
