@@ -287,7 +287,7 @@ class SendPressureSocketMessage(views.APIView):
             pub_channel=pub_channel,
             message=message,
             predicate=predicate,
-            timeout=90,
+            timeout=240,
         )
 
         if result is None:
