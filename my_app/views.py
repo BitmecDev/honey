@@ -1,4 +1,5 @@
 from django.http import HttpResponse, JsonResponse
+import uuid
 import time
 import json
 import libhoney
