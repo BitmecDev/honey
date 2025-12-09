@@ -4,4 +4,4 @@ Servicio Django/DRF que expone endpoints para enviar comandos a las cabinas Bitm
 
 # Documentación del API
 
-(`https://socketio.bitmec.com:2096`)
+(`https://documenter.getpostman.com/view/25429540/2sB3dQwAK1`)
