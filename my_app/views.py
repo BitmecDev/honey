@@ -3,7 +3,7 @@ import time
 import json
 import libhoney
 from rest_framework import generics, views, response, status, filters, viewsets
-
+from django.core.cache import cache
 from django.shortcuts import render
 
 from honeycomb.socket import send_socket_message
@@ -250,66 +250,103 @@ class SendWeightSocketMessage(views.APIView):
 #         send_socket_message(f"{cabin}-cmd", message)
 #         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
+def _run_pressure_measure_async(cabin: str):
+    sub_channel = cabin
+    pub_channel = f"{cabin}-cmd"
+
+    message = {
+        "type": "command",
+        "vital-sign": "esfigmo",
+    }
+
+    readings = {}
+
+    def predicate(msg: dict) -> bool:
+        if not isinstance(msg, dict):
+            return False
+
+        inner = msg.get("message", msg)
+        if not isinstance(inner, dict):
+            return False
+
+        vs = inner.get("vs")
+        valor = inner.get("valor")
+
+        if vs in ("sis", "dias", "map", "bpm"):
+            readings[vs] = valor
+
+        return all(k in readings for k in ("sis", "dias", "map", "bpm"))
+
+    result = broker.publish_and_wait(
+        sub_channel=sub_channel,
+        pub_channel=pub_channel,
+        message=message,
+        predicate=predicate,
+        timeout=240, 
+    )
+
+    cache_key = f"pressure:{cabin}"
+    if result is None:
+        cache.set(
+            cache_key,
+            {"status": "timeout", "data": None},
+            timeout=300,
+        )
+    else:
+        cache.set(
+            cache_key,
+            {"status": "done", "data": readings},
+            timeout=300,
+        )
+
+
 class SendPressureSocketMessage(views.APIView):
     def post(self, request):
         req = json.loads(self.request.body)
         cabin = req["channel"]
+        step = req.get("step", "start") 
+        cache_key = f"pressure:{cabin}"
 
-        sub_channel = cabin
-        pub_channel = f"{cabin}-cmd"
+        if step == "start":
+            cache.delete(cache_key)
 
-        message = {
-            "type": "command",
-            "vital-sign": "esfigmo",
-        }
+            t = threading.Thread(
+                target=_run_pressure_measure_async,
+                args=(cabin,),
+                daemon=True,
+            )
+            t.start()
 
-        readings = {}
-
-        def predicate(msg: dict) -> bool:
-            if not isinstance(msg, dict):
-                return False
-
-            inner = msg.get("message", msg)
-
-            if not isinstance(inner, dict):
-                return False
-
-            vs = inner.get("vs")
-            valor = inner.get("valor")
-
-            if vs in ("sis", "dias", "map", "bpm"):
-                readings[vs] = valor
-
-            return all(k in readings for k in ("sis", "dias", "map", "bpm"))
-
-        result = broker.publish_and_wait(
-            sub_channel=sub_channel,
-            pub_channel=pub_channel,
-            message=message,
-            predicate=predicate,
-            timeout=None,
-        )
-
-        if result is None:
             return JsonResponse(
                 {
-                    "result": False,
-                    "error": "Timeout esperando respuesta de la cabina",
-                    "channel": sub_channel,
+                    "result": True,
+                    "status": "started",
+                    "channel": cabin,
                 },
-                status=504,
+                status=202,
+            )
+
+        data = cache.get(cache_key)
+
+        if not data:
+            return JsonResponse(
+                {
+                    "result": True,
+                    "status": "pending",
+                    "channel": cabin,
+                },
+                status=200,
             )
 
         return JsonResponse(
             {
                 "result": True,
-                "channel": result["channel"],
-                "data": readings,
+                "status": data["status"],  
+                "channel": cabin,
+                "data": data["data"],     
             },
             status=200,
         )
-
-
 
 # Oxygen
 # class SendOxygenSocketMessage(views.APIView):
