@@ -252,12 +252,6 @@ class SendWeightSocketMessage(views.APIView):
 #         send_socket_message(f"{cabin}-cmd", message)
 #         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
-def _parse_body(request):
-    try:
-        return json.loads(request.body or b"{}")
-    except json.JSONDecodeError:
-        return {}
-
 def _run_pressure_measure_async(cabin: str):
     cache_key = f"pressure:{cabin}"
 
@@ -286,6 +280,7 @@ def _run_pressure_measure_async(cabin: str):
             if vs in ("sis", "dias", "map", "bpm"):
                 readings[vs] = valor
 
+            # True solo cuando ya tengamos las 4 lecturas
             return all(k in readings for k in ("sis", "dias", "map", "bpm"))
 
         result = broker.publish_and_wait(
@@ -293,7 +288,7 @@ def _run_pressure_measure_async(cabin: str):
             pub_channel=pub_channel,
             message=message,
             predicate=predicate,
-            timeout=240,
+            timeout=240,  # aquí puede ser grande, es hilo, no request
         )
 
         if result is None:
@@ -310,18 +305,27 @@ def _run_pressure_measure_async(cabin: str):
             )
 
     except Exception as e:
-        # Para que el hilo no reviente silenciosamente
+        # si algo truena dentro del hilo, lo guardamos para verlo
         cache.set(
             cache_key,
             {"status": "error", "data": None, "error": str(e)},
             timeout=300,
         )
 
+
 class SendPressureSocketMessage(views.APIView):
     def post(self, request):
-        req = _parse_body(request)
+        try:
+            req = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {"result": False, "error": "Body JSON inválido"},
+                status=400,
+            )
+
         cabin = req.get("channel")
         step = req.get("step", "start")
+
         if not cabin:
             return JsonResponse(
                 {"result": False, "error": "Debe enviar 'channel' en el body"},
@@ -331,6 +335,7 @@ class SendPressureSocketMessage(views.APIView):
         cache_key = f"pressure:{cabin}"
 
         if step == "start":
+            # limpiar estado y lanzar hilo
             cache.delete(cache_key)
 
             t = threading.Thread(
@@ -349,7 +354,7 @@ class SendPressureSocketMessage(views.APIView):
                 status=202,
             )
 
-        # step != "start" => consultar resultado
+        # step != "start": consultar resultado
         data = cache.get(cache_key)
 
         if not data:
@@ -362,14 +367,12 @@ class SendPressureSocketMessage(views.APIView):
                 status=200,
             )
 
-        # data debería tener "status" y "data"
         return JsonResponse(
             {
                 "result": True,
                 "status": data.get("status", "unknown"),
                 "channel": cabin,
                 "data": data.get("data"),
-                # opcional: exponer error si lo guardamos en _run_pressure_measure_async
                 "error": data.get("error"),
             },
             status=200,
