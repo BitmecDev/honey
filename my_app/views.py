@@ -4,10 +4,12 @@ import json
 import libhoney
 from rest_framework import generics, views, response, status, filters, viewsets
 from django.core.cache import cache
+import threading
 from django.shortcuts import render
 
 from honeycomb.socket import send_socket_message
 from honeycomb.socket_client import broker
+
 
 
 def index(request):
@@ -250,61 +252,82 @@ class SendWeightSocketMessage(views.APIView):
 #         send_socket_message(f"{cabin}-cmd", message)
 #         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
+def _parse_body(request):
+    try:
+        return json.loads(request.body or b"{}")
+    except json.JSONDecodeError:
+        return {}
+
 def _run_pressure_measure_async(cabin: str):
-    sub_channel = cabin
-    pub_channel = f"{cabin}-cmd"
-
-    message = {
-        "type": "command",
-        "vital-sign": "esfigmo",
-    }
-
-    readings = {}
-
-    def predicate(msg: dict) -> bool:
-        if not isinstance(msg, dict):
-            return False
-
-        inner = msg.get("message", msg)
-        if not isinstance(inner, dict):
-            return False
-
-        vs = inner.get("vs")
-        valor = inner.get("valor")
-
-        if vs in ("sis", "dias", "map", "bpm"):
-            readings[vs] = valor
-
-        return all(k in readings for k in ("sis", "dias", "map", "bpm"))
-
-    result = broker.publish_and_wait(
-        sub_channel=sub_channel,
-        pub_channel=pub_channel,
-        message=message,
-        predicate=predicate,
-        timeout=240, 
-    )
-
     cache_key = f"pressure:{cabin}"
-    if result is None:
-        cache.set(
-            cache_key,
-            {"status": "timeout", "data": None},
-            timeout=300,
-        )
-    else:
-        cache.set(
-            cache_key,
-            {"status": "done", "data": readings},
-            timeout=300,
+
+    try:
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
+        message = {
+            "type": "command",
+            "vital-sign": "esfigmo",
+        }
+
+        readings = {}
+
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
+
+            inner = msg.get("message", msg)
+            if not isinstance(inner, dict):
+                return False
+
+            vs = inner.get("vs")
+            valor = inner.get("valor")
+
+            if vs in ("sis", "dias", "map", "bpm"):
+                readings[vs] = valor
+
+            return all(k in readings for k in ("sis", "dias", "map", "bpm"))
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=240,
         )
 
+        if result is None:
+            cache.set(
+                cache_key,
+                {"status": "timeout", "data": None},
+                timeout=300,
+            )
+        else:
+            cache.set(
+                cache_key,
+                {"status": "done", "data": readings},
+                timeout=300,
+            )
+
+    except Exception as e:
+        # Para que el hilo no reviente silenciosamente
+        cache.set(
+            cache_key,
+            {"status": "error", "data": None, "error": str(e)},
+            timeout=300,
+        )
 
 class SendPressureSocketMessage(views.APIView):
     def post(self, request):
-        req = json.loads(self.request.body)
-        cabin = req["channel"]
-        step = req.get("step", "start") 
+        req = _parse_body(request)
+        cabin = req.get("channel")
+        step = req.get("step", "start")
+        if not cabin:
+            return JsonResponse(
+                {"result": False, "error": "Debe enviar 'channel' en el body"},
+                status=400,
+            )
+
         cache_key = f"pressure:{cabin}"
 
         if step == "start":
@@ -326,6 +349,7 @@ class SendPressureSocketMessage(views.APIView):
                 status=202,
             )
 
+        # step != "start" => consultar resultado
         data = cache.get(cache_key)
 
         if not data:
@@ -338,15 +362,19 @@ class SendPressureSocketMessage(views.APIView):
                 status=200,
             )
 
+        # data debería tener "status" y "data"
         return JsonResponse(
             {
                 "result": True,
-                "status": data["status"],  
+                "status": data.get("status", "unknown"),
                 "channel": cabin,
-                "data": data["data"],     
+                "data": data.get("data"),
+                # opcional: exponer error si lo guardamos en _run_pressure_measure_async
+                "error": data.get("error"),
             },
             status=200,
         )
+
 
 # Oxygen
 # class SendOxygenSocketMessage(views.APIView):
