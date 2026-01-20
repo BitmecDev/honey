@@ -14,5 +14,5 @@ urlpatterns = [
     path('patient-exit/', views.SendPatientExitSocketMessage.as_view(), name='patient-exit'),
     path('activate-emergency/', views.SendActivateEmergencySocketMessage.as_view(), name='activate-emergency'),
     path('deactivate-emergency/', views.SendDeactivateEmergencySocketMessage.as_view(), name='deactivate-emergency'),
-    path('get-devices', views.GetDiveces.as_view(), name='get-devices'),
+    path('get-devices/', views.GetDiveces.as_view(), name='get-devices'),
 ]

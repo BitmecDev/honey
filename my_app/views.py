@@ -624,23 +624,32 @@ class GetDiveces(views.APIView):
 
             inner = msg.get("message", msg)
 
+            if isinstance(inner, dict):
+                return inner
+
             if isinstance(inner, str):
                 try:
-                    inner = json.loads(inner)
+                    parsed = ast.literal_eval(inner)
+                    if isinstance(parsed, dict):
+                        return parsed
                 except Exception:
-                    return None
+                    pass
 
-            if not isinstance(inner, dict):
-                return None
+                try:
+                    parsed = json.loads(inner)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except Exception:
+                    pass
 
-            return inner
+            return None
 
         def predicate(msg: dict) -> bool:
             inner = _normalize_inner(msg)
             if not inner:
                 return False
 
-            dv = inner.get("dv") or inner.get("device") or inner.get("vs")
+            dv = inner.get("dv")
             valor = inner.get("valor")
 
             if dv in expected:
@@ -653,7 +662,7 @@ class GetDiveces(views.APIView):
             pub_channel=pub_channel,
             message=message,
             predicate=predicate,
-            timeout=10,  # ajustalo si querés
+            timeout=10,
         )
 
         if result is None:
