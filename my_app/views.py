@@ -587,3 +587,92 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
         }
         send_socket_message
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+    
+
+#Obtener info de los dispositivos médicos de la cabina
+class GetDiveces(views.APIView):
+    def post(self, request):
+        try:
+            req = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {"result": False, "error": "Body JSON inválido"},
+                status=400,
+            )
+
+        cabin = req.get("channel")
+        if not cabin:
+            return JsonResponse(
+                {"result": False, "error": "Debe enviar 'channel'"},
+                status=400,
+            )
+
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
+        message = {
+            "type": "command",
+            "vital-sign": "get-devices",
+        }
+
+        expected = {"esfigmo", "oximetro", "peso", "temperatura", "altura"}
+        readings = {}
+
+        def _normalize_inner(msg):
+            if not isinstance(msg, dict):
+                return None
+
+            inner = msg.get("message", msg)
+
+            if isinstance(inner, str):
+                try:
+                    inner = json.loads(inner)
+                except Exception:
+                    return None
+
+            if not isinstance(inner, dict):
+                return None
+
+            return inner
+
+        def predicate(msg: dict) -> bool:
+            inner = _normalize_inner(msg)
+            if not inner:
+                return False
+
+            dv = inner.get("dv") or inner.get("device") or inner.get("vs")
+            valor = inner.get("valor")
+
+            if dv in expected:
+                readings[dv] = valor
+
+            return expected.issubset(readings.keys())
+
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=message,
+            predicate=predicate,
+            timeout=10,  # ajustalo si querés
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "status": "timeout",
+                    "channel": cabin,
+                    "data": readings if readings else None,
+                },
+                status=408,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "status": "done",
+                "channel": cabin,
+                "data": readings,
+            },
+            status=200,
+        )
