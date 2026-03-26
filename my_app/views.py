@@ -589,6 +589,30 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
     
 
+# End Call
+class EndCallSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+
+        end_call_message = {
+            "type": "navigation",
+            "screen": "end-screen",
+        }
+
+        send_socket_message(f"{cabin}-cmd", end_call_message)
+        send_socket_message(cabin, end_call_message)
+
+        close_cabin_message = {
+            "type": "command",
+            "vital-sign": "close",
+        }
+
+        send_socket_message(f"{cabin}-cmd", close_cabin_message)
+
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
 #Obtener info de los dispositivos médicos de la cabina
 class GetDiveces(views.APIView):
     def post(self, request):
