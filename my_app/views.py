@@ -601,7 +601,6 @@ class EndCallSocketMessage(views.APIView):
         }
 
         send_socket_message(f"{cabin}-cmd", end_call_message)
-        send_socket_message(cabin, end_call_message)
 
         close_cabin_message = {
             "type": "command",
