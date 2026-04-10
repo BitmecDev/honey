@@ -596,18 +596,18 @@ class EndCallSocketMessage(views.APIView):
         cabin = req['channel']
 
         end_call_message = {
-            "type": "navigation",
-            "screen": "end-screen",
+            'type': 'navigation',
+            'screen': 'end-screen',
         }
 
-        send_socket_message(f"{cabin}-cmd", end_call_message)
+        send_socket_message(f'{cabin}-cmd', end_call_message)
 
         close_cabin_message = {
-            "type": "command",
-            "vital-sign": "close",
+            'type': 'command',
+            'vital-sign': 'close',
         }
 
-        send_socket_message(f"{cabin}-cmd", close_cabin_message)
+        send_socket_message(f'{cabin}-cmd', close_cabin_message)
 
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
