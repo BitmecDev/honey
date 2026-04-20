@@ -595,21 +595,50 @@ class EndCallSocketMessage(views.APIView):
         req = json.loads(self.request.body)
         cabin = req['channel']
 
+        sub_channel = cabin
+        pub_channel = f"{cabin}-cmd"
+
         end_call_message = {
             'type': 'navigation',
             'screen': 'end-screen',
         }
 
-        send_socket_message(f'{cabin}-cmd', end_call_message)
+        def predicate(msg: dict) -> bool:
+            if not isinstance(msg, dict):
+                return False
 
-        close_cabin_message = {
-            'type': 'command',
-            'vital-sign': 'close',
-        }
+            inner = msg.get("message")
+            if not isinstance(inner, dict):
+                return False
 
-        send_socket_message(f'{cabin}-cmd', close_cabin_message)
+            return inner.get("type") == "call" and inner.get("state") == "available"
 
-        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+        result = broker.publish_and_wait(
+            sub_channel=sub_channel,
+            pub_channel=pub_channel,
+            message=end_call_message,
+            predicate=predicate,
+            timeout=90,
+        )
+
+        if result is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Timeout esperando respuesta de la cabina",
+                    "channel": sub_channel,
+                },
+                status=504,
+            )
+
+        return JsonResponse(
+            {
+                "result": True,
+                "channel": result["channel"],
+                "data": result["message"],
+            },
+            status=200,
+        )
 
 
 #Obtener info de los dispositivos médicos de la cabina
