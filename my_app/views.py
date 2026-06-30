@@ -592,8 +592,21 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
 #Take call
 class TakeCallSocketMessage(views.APIView):
     def post(self, request):
-        req = json.loads(self.request.body)
-        cabin = req['channel']
+        try:
+            req = json.loads(request.body or b"{}")
+        except json.JSONDecodeError:
+            return JsonResponse(
+                {"result": False, "error": "Body JSON inválido"},
+                status=400,
+            )
+
+        cabin = req.get("channel")
+        if not cabin:
+            return JsonResponse(
+                {"result": False, "error": "Debe enviar 'channel'"},
+                status=400,
+            )
+
         message = {
             "type": "doctor-take-call",
             "status": 'answered',
