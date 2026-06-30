@@ -589,6 +589,23 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
     
 
+#Take call
+class TakeCallSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "doctor-take-call",
+            "status": 'answered',
+            "id": 'None',
+            "assistant-id": 'None',
+            "cabin-id": f"{cabin}"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+
+
 # End Call
 class EndCallSocketMessage(views.APIView):
     def post(self, request):
