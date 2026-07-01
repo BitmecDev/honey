@@ -622,6 +622,10 @@ def _get_latest_call_id(cabin):
     return latest_call.get("id")
 
 
+def _get_cabin_number_from_channel(channel):
+    return str(channel).rsplit("-", 1)[-1]
+
+
 # Take call
 class TakeCallSocketMessage(views.APIView):
     def post(self, request):
@@ -640,8 +644,19 @@ class TakeCallSocketMessage(views.APIView):
                 status=400,
             )
 
+        cabin_number = _get_cabin_number_from_channel(cabin)
+        if not cabin_number.isdigit():
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "El channel debe tener formato 'cabin-34'",
+                    "channel": cabin,
+                },
+                status=400,
+            )
+
         try:
-            latest_call_id = _get_latest_call_id(cabin)
+            latest_call_id = _get_latest_call_id(cabin_number)
         except requests.RequestException as e:
             return JsonResponse(
                 {
