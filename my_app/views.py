@@ -3,6 +3,8 @@ import uuid
 import time
 import json
 import libhoney
+import requests
+from datetime import datetime, timezone
 from rest_framework import generics, views, response, status, filters, viewsets
 from django.core.cache import cache
 import threading
@@ -11,6 +13,9 @@ from django.shortcuts import render
 from honeycomb.socket import send_socket_message
 from honeycomb.socket_client import broker
 
+
+CALLS_BY_CABIN_URL = "https://api2.bitmec.com/api/cabin/calls-by-cabin/{cabin}/"
+CALLS_BY_CABIN_TOKEN = "Token 85e95e0a0a65010672f85c0f4f03f93a2ec190ae"
 
 
 def index(request):
@@ -589,7 +594,35 @@ class SendDeactivateEmergencySocketMessage(views.APIView):
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
     
 
-#Take call
+def _get_latest_call_id(cabin):
+    response = requests.get(
+        CALLS_BY_CABIN_URL.format(cabin=cabin),
+        headers={"Authorization": CALLS_BY_CABIN_TOKEN},
+        timeout=10,
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    calls = data.get("calls", [])
+    if not calls:
+        return None
+
+    def call_timestamp(call):
+        try:
+            parsed = datetime.fromisoformat(call.get("timestamp", "").replace("Z", "+00:00"))
+        except (AttributeError, ValueError):
+            return datetime.min.replace(tzinfo=timezone.utc)
+
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+
+        return parsed
+
+    latest_call = max(calls, key=call_timestamp)
+    return latest_call.get("id")
+
+
+# Take call
 class TakeCallSocketMessage(views.APIView):
     def post(self, request):
         try:
@@ -607,10 +640,41 @@ class TakeCallSocketMessage(views.APIView):
                 status=400,
             )
 
+        try:
+            latest_call_id = _get_latest_call_id(cabin)
+        except requests.RequestException as e:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "No se pudo obtener la llamada más reciente",
+                    "detail": str(e),
+                },
+                status=502,
+            )
+        except ValueError as e:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "Respuesta inválida del servicio de llamadas",
+                    "detail": str(e),
+                },
+                status=502,
+            )
+
+        if latest_call_id is None:
+            return JsonResponse(
+                {
+                    "result": False,
+                    "error": "No hay llamadas para esta cabina",
+                    "channel": cabin,
+                },
+                status=404,
+            )
+
         message = {
             "type": "doctor-take-call",
             "status": 'answered',
-            "id": 'None',
+            "id": latest_call_id,
             "assistant-id": 'None',
             "cabin-id": f"{cabin}"
         }
