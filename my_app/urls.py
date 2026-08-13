@@ -17,4 +17,5 @@ urlpatterns = [
     path('take-call/', views.TakeCallSocketMessage.as_view(), name='take-call'),
     path('end-call/', views.EndCallSocketMessage.as_view(), name='end-call'),
     path('get-devices/', views.GetDiveces.as_view(), name='get-devices'),
+    path('switch-derm-camera/', views.SendDermCameraSocketMessage.as_view(), name='switch-derm-camera'),
 ]

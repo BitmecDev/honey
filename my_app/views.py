@@ -817,3 +817,17 @@ class GetDiveces(views.APIView):
             },
             status=200,
         )
+        
+# Cambiar a la cámara dermatologica 
+
+class SendDermCameraSocketMessage(views.APIView):
+    def post(self, request):
+        req = json.loads(self.request.body)
+        cabin = req['channel']
+        message = {
+            "type": "command",
+            "vital-sign": "derm-camera"
+        }
+        send_socket_message(f"{cabin}-cmd", message)
+        return HttpResponse(json.dumps({'result': True}), content_type='application/json')
+    
