@@ -828,6 +828,6 @@ class SendDermCameraSocketMessage(views.APIView):
             "type": "command",
             "vital-sign": "derm-camera"
         }
-        send_socket_message(f"{cabin}-cmd", message)
+        send_socket_message(f"{cabin}", message)
         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
     
