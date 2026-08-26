@@ -1,21 +1,24 @@
 from django.http import HttpResponse, JsonResponse
-import uuid
 import time
 import json
 import libhoney
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from rest_framework import generics, views, response, status, filters, viewsets
-from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.db import close_old_connections
+from django.utils import timezone as django_timezone
 import threading
 from django.shortcuts import render
 
 from honeycomb.socket import send_socket_message
 from honeycomb.socket_client import broker
+from my_app.models import PressureMeasurement
 
 
 CALLS_BY_CABIN_URL = "https://api2.bitmec.com/api/cabin/calls-by-cabin/{cabin}/"
 CALLS_BY_CABIN_TOKEN = "Token 85e95e0a0a65010672f85c0f4f03f93a2ec190ae"
+PRESSURE_RUN_TTL_SECONDS = 600
 
 
 def index(request):
@@ -23,70 +26,6 @@ def index(request):
 
 
 libhoney.init(writekey='cQDbjNT0FAoOYWFA5XJwBC', dataset='telemetry')
-
-
-""" 
-def log_event(name, message, view, request_type, status_code=None, email=None, error=None, metadata=None):
-    event = libhoney.new_event()
-    payload = {
-        'status': 'error' if error  else 'success',
-        'status_code': status_code,
-        'error': error,
-        'email': email,
-        'name': name,
-        'message': message,
-        'view': view,
-        'request_type': request_type,
-        'metadata': json.dumps(metadata) if metadata else None,
-    }
-
-    event.add(payload)
-    event.send()
-
-    return HttpResponse(payload, request_type, status_code)
-
-
-# 1. Basic successful login
-log_event('login', 'User logged in successfully', 'login_page', 'POST', status_code=200, email='user@example.com')
-
-# 2. Failed login attempt
-log_event('login_failure', 'Invalid credentials', 'login_page', 'POST', status_code=401, error='Authentication failed')
-
-# 3. User registration
-log_event('register', 'New user registered', 'registration_page', 'POST', status_code=201, email='newuser@example.com')
-
-# 4. Password reset request
-log_event('password_reset', 'Password reset requested', 'forgot_password_page', 'POST', email='user@example.com')
-
-# 5. View product page
-log_event('view_product', 'User viewed product', 'product_page', 'GET', metadata={'product_id': '12345'})
-
-# 6. Add to cart
-log_event('add_to_cart', 'Product added to cart', 'product_page', 'POST', metadata={'product_id': '12345', 'quantity': 2})
-
-# 7. Checkout process
-log_event('checkout', 'User initiated checkout', 'checkout_page', 'POST', email='user@example.com', metadata={'total_amount': 99.99})
-
-# 8. Order confirmation
-log_event('order_confirmation', 'Order placed successfully', 'order_confirmation_page', 'GET', status_code=200, email='user@example.com', metadata={'order_id': 'ORD-123456'})
-
-# 9. Customer support ticket
-log_event('support_ticket', 'New support ticket created', 'support_page', 'POST', email='user@example.com', metadata={'ticket_id': 'TICKET-789'})
-
-# 10. API call error
-log_event('api_error', 'External API call failed', 'backend_process', 'GET', status_code=500, error='API timeout', metadata={'api_endpoint': 'https://api.example.com/data'})
-
-log_event('oximetro', 'Medición exitosa', 'Signos vitales', 'POST',  metadata=[{'cabina': '34' }, {'freq cardiacia': 'valor'}, {'oxigenación': 'valor'}])
-
-
-count = 0
-while True:
-    count = count + 1
-    time.sleep(1)
-    print(f'{count} seconds elapsed')
-    if count == 10:
-        break
-"""
 
 
 class SendHoneyCombData(views.APIView):
@@ -259,8 +198,7 @@ class SendWeightSocketMessage(views.APIView):
 #         return HttpResponse(json.dumps({'result': True}), content_type='application/json')
 
 def _run_pressure_measure_async(cabin: str, run_id: str):
-    cache_key = f"pressure:{cabin}:{run_id}"
-
+    close_old_connections()
     try:
         sub_channel = cabin
         pub_channel = f"{cabin}-cmd"
@@ -293,28 +231,36 @@ def _run_pressure_measure_async(cabin: str, run_id: str):
             pub_channel=pub_channel,
             message=message,
             predicate=predicate,
-            timeout=240,  
+            timeout=240,
         )
 
         if result is None:
-            cache.set(
-                cache_key,
-                {"status": "timeout", "data": None},
-                timeout=300,
+            PressureMeasurement.objects.filter(pk=run_id).update(
+                status=PressureMeasurement.Status.TIMEOUT,
+                data=None,
+                error=None,
+                updated_at=django_timezone.now(),
             )
         else:
-            cache.set(
-                cache_key,
-                {"status": "done", "data": readings},
-                timeout=300,
+            PressureMeasurement.objects.filter(pk=run_id).update(
+                status=PressureMeasurement.Status.DONE,
+                data=readings,
+                error=None,
+                updated_at=django_timezone.now(),
             )
 
     except Exception as e:
-        cache.set(
-            cache_key,
-            {"status": "error", "data": None, "error": str(e)},
-            timeout=300,
-        )
+        try:
+            PressureMeasurement.objects.filter(pk=run_id).update(
+                status=PressureMeasurement.Status.ERROR,
+                data=None,
+                error=str(e),
+                updated_at=django_timezone.now(),
+            )
+        except Exception:
+            pass
+    finally:
+        close_old_connections()
 
 
 class SendPressureSocketMessage(views.APIView):
@@ -342,14 +288,9 @@ class SendPressureSocketMessage(views.APIView):
                 status=400,
             )
 
-        current_key = f"pressure:{cabin}:current"
-
         if step == "start":
-            run_id = str(uuid.uuid4())
-
-            cache.set(current_key, run_id, timeout=600)
-
-            cache.delete(f"pressure:{cabin}:{run_id}")
+            measurement = PressureMeasurement.objects.create(cabin=str(cabin))
+            run_id = str(measurement.pk)
 
             t = threading.Thread(
                 target=_run_pressure_measure_async,
@@ -363,13 +304,31 @@ class SendPressureSocketMessage(views.APIView):
                     "result": True,
                     "status": "started",
                     "channel": cabin,
-                    "run_id": run_id,  
+                    "run_id": run_id,
                 },
                 status=202,
             )
 
-        run_id = cache.get(current_key)
-        if not run_id:
+        requested_run_id = req.get("run_id")
+        measurements = PressureMeasurement.objects.filter(
+            cabin=str(cabin),
+            created_at__gte=(
+                django_timezone.now() - timedelta(seconds=PRESSURE_RUN_TTL_SECONDS)
+            ),
+        )
+
+        try:
+            if requested_run_id:
+                measurement = measurements.filter(pk=requested_run_id).first()
+            else:
+                measurement = measurements.first()
+        except (ValidationError, ValueError):
+            return JsonResponse(
+                {"result": False, "error": "El 'run_id' no es válido"},
+                status=400,
+            )
+
+        if measurement is None:
             return JsonResponse(
                 {
                     "result": False,
@@ -379,15 +338,13 @@ class SendPressureSocketMessage(views.APIView):
                 status=200,
             )
 
-        data_key = f"pressure:{cabin}:{run_id}"
-        data = cache.get(data_key)
-
-        if not data:
+        if measurement.status == PressureMeasurement.Status.PENDING:
             return JsonResponse(
                 {
                     "result": True,
                     "status": "pending",
                     "channel": cabin,
+                    "run_id": str(measurement.pk),
                 },
                 status=200,
             )
@@ -395,11 +352,11 @@ class SendPressureSocketMessage(views.APIView):
         return JsonResponse(
             {
                 "result": True,
-                "status": data.get("status", "unknown"),
+                "status": measurement.status,
                 "channel": cabin,
-                "data": data.get("data"),
-                "run_id": run_id,
-                "error": data.get("error"),
+                "data": measurement.data,
+                "run_id": str(measurement.pk),
+                "error": measurement.error,
             },
             status=200,
         )
